@@ -1,7 +1,10 @@
 package com.example.app
 import android.content.Context
+import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteOpenHelper
 import android.os.Bundle
 import android.util.Patterns
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
@@ -43,23 +46,106 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.myapp.tp5.Product
+import com.example.app.db.FeedReaderDbHelper
+import com.example.app.db.Product
+import com.example.app.ui.theme.AppTheme
 import java.io.File
 
 
 // Trendy colors with gradient effects
-val TrendPurple = Color(0xFF8E44AD)
-val TrendPink = Color(0xFFE91E63)
-val TrendWhite = Color(0xFFF7F7F7)
+val CandyPink = Color(0xFFFF69B4)
+val SkyBlue = Color(0xFF87CEEB)
+val GradientWhite = Color(0xFFFFFFFF)
+private const val DATABASE_NAME = "UserData.db"
+private const val DATABASE_VERSION = 1
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MainScreen()
+            AppTheme {
+                ProductOperations()
+            }
         }
     }
 }
+@Composable
+fun ProductOperations() {
+    val dbHelper = FeedReaderDbHelper(LocalContext.current)
+    val db = dbHelper.writableDatabase
+
+    // Insertion d'un produit
+    val productToInsert = Product("Produit 1", "Description du produit", painterResource(id = R.drawable.img1))
+    val productId = dbHelper.insertProduct(db, productToInsert)
+
+    // Lecture d'un produit
+    val product = dbHelper.readProduct(db, productId)
+    product?.let {
+        // Utilisez un toast ou une autre méthode pour afficher le produit
+        Toast.makeText(LocalContext.current, "Nom: ${it.name}, Description: ${it.description}", Toast.LENGTH_SHORT).show()
+    }
+
+    // Mise à jour d'un produit
+    val updatedProduct = Product("Produit 1 Modifié", "Description mise à jour", painterResource(id = R.drawable.img2))
+    dbHelper.updateProduct(db, productId, updatedProduct)
+
+    // Suppression d'un produit
+    dbHelper.deleteProduct(db, productId)
+}
+
+class UserDataDbHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
+
+    override fun onCreate(db: SQLiteDatabase) {
+        val createTableQuery = """
+            CREATE TABLE User (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT,
+                email TEXT,
+                password TEXT
+            )
+        """
+        db.execSQL(createTableQuery)
+    }
+
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        db.execSQL("DROP TABLE IF EXISTS User")
+        onCreate(db)
+    }
+
+    fun insertUser(name: String, email: String, password: String): Boolean {
+        val db = this.writableDatabase
+        val insertQuery = "INSERT INTO User (name, email, password) VALUES (?, ?, ?)"
+        val statement = db.compileStatement(insertQuery)
+        statement.bindString(1, name)
+        statement.bindString(2, email)
+        statement.bindString(3, password)
+
+        return statement.executeInsert() != -1L
+    }
+
+    fun fetchAllUsers(): List<User> {
+        val db = this.readableDatabase
+        val cursor = db.rawQuery("SELECT * FROM User", null)
+        val users = mutableListOf<User>()
+
+        if (cursor.moveToFirst()) {
+            do {
+                val id = cursor.getInt(cursor.getColumnIndexOrThrow("id"))
+                val name = cursor.getString(cursor.getColumnIndexOrThrow("name"))
+                val email = cursor.getString(cursor.getColumnIndexOrThrow("email"))
+                val password = cursor.getString(cursor.getColumnIndexOrThrow("password"))
+                users.add(User(id, name, email, password))
+            } while (cursor.moveToNext())
+        }
+
+        cursor.close()
+        return users
+    }
+}
+
+// User data class
+data class User(val id: Int, val name: String, val email: String, val password: String)
+
 fun saveUserData(context: Context,name: String, email: String, password: String) {
     val userData = "Name: $name\nEmail: $email\nPassword: $password"
     val file = File(context.filesDir, "userData.txt")
@@ -74,7 +160,7 @@ fun MainScreen() {
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(TrendPurple, TrendPink, TrendWhite) // Trendy background gradient
+                    colors = listOf(CandyPink, SkyBlue, GradientWhite) // Trendy background gradient
                 )
             )
     ) {
@@ -126,7 +212,7 @@ fun LoginScreen(
                 .padding(16.dp)
                 .background(
                     Brush.horizontalGradient(
-                        colors = listOf(TrendPurple, TrendPink, TrendWhite)
+                        colors = listOf(CandyPink,  SkyBlue, GradientWhite)
                     )
                 )
                 .padding(16.dp),
@@ -155,7 +241,7 @@ fun LoginScreen(
                 .padding(16.dp)
                 .background(
                     Brush.horizontalGradient(
-                        colors = listOf(TrendPurple, TrendPink, TrendWhite)
+                        colors = listOf(CandyPink, SkyBlue, GradientWhite)
                     )
                 )
                 .padding(16.dp),
@@ -190,7 +276,7 @@ fun LoginScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = TrendPink)
+            colors = ButtonDefaults.buttonColors(containerColor = CandyPink)
         ) {
             Text("Log In", fontSize = 20.sp, color = Color.Black)
         }
@@ -241,7 +327,7 @@ fun HomeScreen(onLogoutClick: () -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = TrendPurple)
+            colors = ButtonDefaults.buttonColors(containerColor = SkyBlue)
         ) {
             Text("Logout", fontSize = 20.sp, color = Color.Black)
         }
@@ -279,8 +365,15 @@ fun ProductCard(product: Product) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            Button(onClick = { showDescription = !showDescription }) {
-                Text(if (showDescription) "Hide Description" else "Show Description")
+            // Modification de la couleur de fond du bouton
+            Button(
+                onClick = { showDescription = !showDescription },
+                colors = ButtonDefaults.buttonColors(containerColor = CandyPink)
+            ) {
+                Text(
+                    text = if (showDescription) "Hide Description" else "Show Description",
+                    color = Color.Black // Texte noir pour contraste
+                )
             }
 
             if (showDescription) {
@@ -290,6 +383,7 @@ fun ProductCard(product: Product) {
         }
     }
 }
+
 
 // Reset Password Screen with trendy gradient background
 @Composable
@@ -319,7 +413,7 @@ fun ResetPasswordScreen(onBackClick: () -> Unit) {
                     .padding(16.dp)
                     .background(
                         Brush.horizontalGradient(
-                            colors = listOf(TrendPurple, TrendPink, TrendWhite)
+                            colors = listOf(CandyPink, SkyBlue, GradientWhite )
                         )
                     )
                     .padding(16.dp),
@@ -347,7 +441,7 @@ fun ResetPasswordScreen(onBackClick: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = TrendPink)
+                colors = ButtonDefaults.buttonColors(containerColor = SkyBlue)
             ) {
                 Text("Send Reset Email", fontSize = 20.sp, color = Color.Black)
             }
@@ -357,7 +451,7 @@ fun ResetPasswordScreen(onBackClick: () -> Unit) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Button(onClick = onBackClick, colors = ButtonDefaults.buttonColors(containerColor = TrendPurple)) {
+        Button(onClick = onBackClick, colors = ButtonDefaults.buttonColors(containerColor =  CandyPink)) {
             Text("Back to Login", fontSize = 20.sp, color = Color.Black)
         }
     }
@@ -392,7 +486,7 @@ fun SignUpScreen(onBackClick: () -> Unit) {
                 .padding(16.dp)
                 .background(
                     Brush.horizontalGradient(
-                        colors = listOf(TrendPurple, TrendPink, TrendWhite)
+                        colors = listOf( CandyPink,  SkyBlue, GradientWhite)
                     )
                 )
                 .padding(16.dp),
@@ -418,7 +512,7 @@ fun SignUpScreen(onBackClick: () -> Unit) {
                 .padding(16.dp)
                 .background(
                     Brush.horizontalGradient(
-                        colors = listOf(TrendPurple, TrendPink, TrendWhite)
+                        colors = listOf(CandyPink, SkyBlue, GradientWhite)
                     )
                 )
                 .padding(16.dp),
@@ -447,7 +541,7 @@ fun SignUpScreen(onBackClick: () -> Unit) {
                 .padding(16.dp)
                 .background(
                     Brush.horizontalGradient(
-                        colors = listOf(TrendPurple, TrendPink, TrendWhite)
+                        colors = listOf(CandyPink, SkyBlue, GradientWhite)
                     )
                 )
                 .padding(16.dp),
@@ -477,7 +571,7 @@ fun SignUpScreen(onBackClick: () -> Unit) {
                 .padding(16.dp)
                 .background(
                     Brush.horizontalGradient(
-                        colors = listOf(TrendPurple, TrendPink, TrendWhite)
+                        colors = listOf(CandyPink, SkyBlue, GradientWhite)
                     )
                 )
                 .padding(16.dp),
@@ -513,7 +607,7 @@ fun SignUpScreen(onBackClick: () -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = TrendPink)
+            colors = ButtonDefaults.buttonColors(containerColor = SkyBlue)
         ) {
             Text("Sign Up", fontSize = 20.sp, color = Color.Black)
         }

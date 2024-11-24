@@ -1,4 +1,4 @@
-package com.example.myapp.tp5
+package com.example.app.db
 
 import androidx.compose.ui.graphics.painter.Painter
 
